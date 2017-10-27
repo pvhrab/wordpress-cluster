@@ -26,7 +26,7 @@ ansible-playbook -c local core.yml
 
 # Vagrant install modules
 vagrant plugin install docker
-vagrant plugin install host-manager
+vagrant plugin install vagrant-hostmanager
 
 # start project
 vagrant up
