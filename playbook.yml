@@ -1,0 +1,187 @@
+---
+- name: Install Packages to Dcoker Conteiner
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: false
+  roles:
+  vars:
+    download_dir: /tmp
+
+  pre_tasks:
+    - name: Gathering Facts
+      setup:
+
+  tasks:
+    - name: Ansible Install required packages
+      apt: name={{ item }} state=latest
+      with_items:
+        - python-apt
+        - python-dev
+        - python-pip
+        - python-pycurl
+        - python-mysqldb
+        - net-tools
+        - mc
+
+    - name: Repos PPA enabled
+      apt_repository: repo='{{item}}' state=present update_cache=no
+      with_items:
+        - ppa:ansible/ansible
+
+    - name: Install Roles from Requrements
+      command: ansible-galaxy install -r requirements.yml --roles-path roles
+
+    - name: create directory if they don't exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0777
+      with_items:
+        - /var/run/php
+
+- name: MySQL Install & Configure
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: false
+  roles:
+    - role: geerlingguy.mysql
+
+  vars:
+    mysql_root_password_update: yes
+    mysql_user_password_update: yes
+    mysql_enabled_on_startup: yes
+    mysql_packages:
+      - mariadb-client
+      - mariadb-server
+      - python-mysqldb
+
+    mysql_databases:
+      - name: wordpress
+        collation: utf8_general_ci
+        encoding: utf8
+        replicate: 0
+
+    mysql_users:
+      - name: wordpress
+        host: localhost
+        password: 123321
+        priv: wordpress.*:ALL
+
+  pre_tasks:
+    - name: Gathering Facts
+      setup:
+
+- name: Nginx Install
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: false
+  roles:
+    - role: geerlingguy.nginx
+
+  vars:
+    nginx_multi_accept: "on"
+    nginx_ppa_use: true
+    nginx_ppa_version: stable
+    nginx_vhosts:
+      - listen: "80"
+        server_name: "test123.testerio.com"
+        root: "/var/www"
+        index: "index.php"
+        state: "present"
+        template: "{{ nginx_vhost_template }}"
+        filename: "wordpress.conf"
+        extra_parameters: |
+          location ~ \.php$ {
+              fastcgi_split_path_info ^(.+\.php)(/.+)$;
+              fastcgi_pass unix:/var/run/php7.0-fpm.sock;
+              fastcgi_index index.php;
+              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              include fastcgi_params;
+          }
+
+  pre_tasks:
+    - name: Gathering Facts
+      setup:
+
+  tasks:
+    - name: Nginx Start
+      command: service nginx restart
+
+- name: PHP 7.0 Install
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: false
+  roles:
+    - role: geerlingguy.php
+
+  vars:
+    php_version: "7.0"
+    php_enable_webserver: true
+    php_webserver_daemon: "nginx"
+    php_date_timezone: "Europe/Prague"
+    php_mysql_package: php7.0-mysql
+    php_enable_php_fpm: true
+    php_fpm_daemon: php7.0-fpm
+    php_install_recommends: yes
+    php_fpm_listen: "/var/run/php7.0-fpm.sock"
+    php_fpm_listen_allowed_clients: "127.0.0.1"
+    php_fpm_pm_max_children: 50
+    php_fpm_pm_start_servers: 5
+    php_fpm_pm_min_spare_servers: 5
+    php_fpm_pm_max_spare_servers: 5
+    php_fpm_pool_conf_path: "/etc/php/7.0/fpm/pool.d/www.conf"
+    php_packages_extra: 
+        - php-getid3 
+        - php7.0-readline
+        - php7.0-mysql
+
+  pre_tasks:
+    - name: Gathering Facts
+      setup:
+
+  tasks:
+    - name: Nginx Start
+      command: service php7.0-fpm restart
+
+- name: Install Wordpress
+  hosts: all
+  become: true
+  become_method: sudo
+  gather_facts: false
+  roles:
+    - tersmitten.wordpress
+
+  vars:
+    wordpress_installs:
+      - name: wordpress
+        dbname: wordpress
+        dbuser: wordpress
+        dbpass: '123321'
+        dbhost: localhost
+        path: /var/www
+        url: http://test123.testerio.com
+        title: wordpress
+        admin_name: admin
+        admin_email: root@localhost.localdomain
+        admin_password: 'tuFr8=aPr1a@a'
+        themes:
+          - name: twentytwelve
+            activate: true
+          - name: twentythirteen
+        plugins:
+          - name: contact-form-7
+            activate: false
+          - name: simple-fields
+        users: {}
+        options: []
+        queries: []
+
+  pre_tasks:
+    - name: Gathering Facts
+      setup:

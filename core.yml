@@ -1,0 +1,79 @@
+---
+- name: Core Setup
+  hosts: localhost
+  become: true
+  become_method: sudo
+  gather_facts: false
+  roles:
+  vars:
+    download_dir: /tmp
+
+  pre_tasks:
+    - name: Gathering Facts
+      setup:
+
+  tasks:
+    - name: Install Roles from Requrements
+      command: ansible-galaxy install -r requirements.yml --roles-path roles
+
+    - name: Configure ufw defaults
+      ufw: direction={{ item.direction }} policy={{ item.policy }}
+      with_items:
+        - { direction: 'incoming', policy: 'deny' }
+        - { direction: 'outgoing', policy: 'allow' }
+
+    - name: Configure ufw rules
+      ufw: rule={{ item.rule }} port={{ item.port }} proto={{ item.proto }}
+      with_items:
+        - { rule: 'allow', port: '22', proto: 'tcp' }
+        - { rule: 'allow', port: '80', proto: 'tcp' }
+        - { rule: 'allow', port: '443', proto: 'tcp' }
+
+    - name: Allow Traffic from IP
+      ufw: rule=allow proto=tcp
+        from_ip={{ item }}
+      with_items:
+        - "145.239.29.249/32"
+
+    - name: Enable ufw logging
+      ufw: logging=off
+
+    - name: Enable ufw
+      ufw: state=enabled
+
+- name: Vagrant Install 1.9.8
+  hosts: localhost
+  become: true
+  become_method: sudo
+  gather_facts: false
+  roles:
+    - andrewrothstein.vagrant
+
+  vars:
+    vagrant_version : '1.9.8'
+    vagrant_checksums:
+        deb: sha256:bdcb5637bade2e57e47a7b0118598e2b8e883b640319a4417c04f662ec073fc6
+
+  pre_tasks:
+    - name: Gathering Facts
+      setup:
+
+- name: Haproxy Setup
+  hosts: localhost
+  become: true
+  become_method: sudo
+  gather_facts: false
+  roles:
+    - geerlingguy.haproxy
+
+  vars:
+    haproxy_backend_balance_method: 'source'
+    haproxy_backend_servers:
+    - name: node1
+      address: 127.0.0.1:8800
+    - name: node2
+      address: 127.0.0.1:8801
+
+  pre_tasks:
+    - name: Gathering Facts
+      setup:
